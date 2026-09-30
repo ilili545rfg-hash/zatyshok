@@ -34,53 +34,82 @@
 <div class="header">
   <h1>🍳 Кухня — «Затишок»</h1>
   <p>Нові замовлення з'являються автоматично</p>
-  <div class="badge">● Очікування замовлень...</div>
+  <div class="badge" id="badge">● Очікування замовлень...</div>
 </div>
 
-<div class="orders" id="orders">
-  <div class="empty">Поки що немає замовлень 😴<br>Як тільки гість оформить — з'явиться тут!</div>
-</div>
+<div class="orders" id="orders"></div>
+<div class="empty" id="empty">Поки що немає замовлень 😴<br>Як тільки гість оформить — з'явиться тут!</div>
 
 <script>
 const DB_URL = "https://nfcaurotag-default-rtdb.europe-west1.firebasedatabase.app/orders.json";
 const fmt = n => n.toLocaleString('uk-UA') + ' ₴';
 const ordersEl = document.getElementById('orders');
+const emptyEl = document.getElementById('empty');
+const badgeEl = document.getElementById('badge');
+
+// ключі замовлень, які вже показані на екрані
+const shown = new Map(); // key -> DOM element
+
+function buildCard(key, o){
+  const card = document.createElement('div');
+  card.className = 'order';
+  const payIcon = o.pay === 'card' ? '💳' : '💵';
+  card.innerHTML = `
+    <div class="order-top">
+      <span class="num">№ ${o.num}</span>
+      <span class="time">🕐 ${o.time}</span>
+    </div>
+    <div class="meta">
+      <span>🪑 Столик: <b>${o.table}</b></span>
+      <span>👤 ${o.name}</span>
+      <span>${payIcon} ${o.pay === 'card' ? 'Картка' : 'Готівка'}</span>
+    </div>
+    ${o.comment ? `<div class="comment">💬 ${o.comment}</div>` : ''}
+    <div class="items">
+      ${o.items.map(i => `<div class="item"><span>${i.name} × ${i.qty}</span><span>${fmt(i.price*i.qty)}</span></div>`).join('')}
+      <div class="sum">Разом: ${fmt(o.sum)}</div>
+    </div>
+    <button class="done" data-key="${key}">✓ Виконано</button>`;
+  return card;
+}
 
 function loadOrders(){
   fetch(DB_URL).then(r => r.json()).then(data => {
-    ordersEl.innerHTML = '';
-    if(!data){
-      ordersEl.innerHTML = '<div class="empty">Поки що немає замовлень 😴<br>Як тільки гість оформить — з\'явиться тут!</div>';
-      return;
+    const keys = data ? Object.keys(data) : [];
+
+    // 1. Видаляємо картки, яких вже немає в базі
+    for(const [key, el] of shown){
+      if(!keys.includes(key)){
+        el.remove();
+        shown.delete(key);
+      }
     }
-    Object.entries(data).forEach(([key, o]) => {
-      const card = document.createElement('div');
-      card.className = 'order';
-      const payIcon = o.pay === 'card' ? '💳' : '💵';
-      card.innerHTML = `
-        <div class="order-top">
-          <span class="num">№ ${o.num}</span>
-          <span class="time">🕐 ${o.time}</span>
-        </div>
-        <div class="meta">
-          <span>🪑 Столик: <b>${o.table}</b></span>
-          <span>👤 ${o.name}</span>
-          <span>${payIcon} ${o.pay === 'card' ? 'Картка' : 'Готівка'}</span>
-        </div>
-        ${o.comment ? `<div class="comment">💬 ${o.comment}</div>` : ''}
-        <div class="items">
-          ${o.items.map(i => `<div class="item"><span>${i.name} × ${i.qty}</span><span>${fmt(i.price*i.qty)}</span></div>`).join('')}
-          <div class="sum">Разом: ${fmt(o.sum)}</div>
-        </div>
-        <button class="done" data-key="${key}">✓ Виконано</button>`;
-      ordersEl.appendChild(card);
+
+    // 2. Додаємо тільки НОВІ картки (старі не чіпаємо — тому немає миготіння)
+    keys.forEach(key => {
+      if(!shown.has(key)){
+        const card = buildCard(key, data[key]);
+        ordersEl.prepend(card); // нові — зверху
+        shown.set(key, card);
+      }
     });
-  });
+
+    // 3. Порожній стан
+    if(shown.size === 0){
+      emptyEl.style.display = 'block';
+      badgeEl.textContent = '● Очікування замовлень...';
+    } else {
+      emptyEl.style.display = 'none';
+      badgeEl.textContent = `● Активних замовлень: ${shown.size}`;
+    }
+  }).catch(()=>{});
 }
 
 ordersEl.addEventListener('click', e => {
   const btn = e.target.closest('.done'); if(!btn) return;
-  fetch(DB_URL.replace('.json', '/' + btn.dataset.key + '.json'), {method:'DELETE'}).then(loadOrders);
+  btn.textContent = '...'; btn.disabled = true;
+  fetch(DB_URL.replace('.json', '/' + btn.dataset.key + '.json'), {method:'DELETE'})
+    .then(loadOrders);
 });
 
 loadOrders();
