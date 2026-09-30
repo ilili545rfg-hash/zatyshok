@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Кухня — нові замовлення</title>
+<style>
+  :root{--bg:#1a1d27;--card:#232838;--accent:#c2452d;--green:#2e7d4f;--text:#f2f3f7;--muted:#9aa0b0;}
+  *{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,'Segoe UI',Roboto,sans-serif;}
+  body{background:var(--bg);color:var(--text);min-height:100vh;}
+  .header{padding:20px;text-align:center;position:sticky;top:0;background:var(--bg);z-index:10;}
+  .header h1{font-size:22px;}
+  .header p{color:var(--muted);font-size:13px;margin-top:4px;}
+  .badge{display:inline-block;margin-top:8px;padding:4px 12px;border-radius:999px;background:var(--green);font-size:12px;font-weight:700;}
+  .orders{padding:16px;display:flex;flex-direction:column;gap:14px;max-width:560px;margin:0 auto;}
+  .order{background:var(--card);border-radius:16px;padding:16px;border-left:5px solid var(--accent);animation:slideIn .3s ease;}
+  @keyframes slideIn{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:none}}
+  .order-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+  .num{font-weight:800;font-size:18px;color:var(--accent);}
+  .time{color:var(--muted);font-size:13px;}
+  .meta{font-size:13px;color:var(--muted);margin-bottom:10px;display:flex;gap:12px;flex-wrap:wrap;}
+  .meta b{color:var(--text);}
+  .items{border-top:1px solid #333a4d;padding-top:8px;margin-bottom:10px;}
+  .item{display:flex;justify-content:space-between;font-size:14px;padding:3px 0;}
+  .sum{font-weight:800;font-size:16px;margin-top:6px;text-align:right;}
+  .comment{font-size:13px;color:#e8c872;font-style:italic;margin-bottom:8px;}
+  .done{width:100%;background:var(--green);color:#fff;border:none;padding:12px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;}
+  .empty{text-align:center;color:var(--muted);padding:60px 20px;font-size:15px;}
+  @media(min-width:640px){.orders{max-width:600px;}}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🍳 Кухня — «Затишок»</h1>
+  <p>Нові замовлення з'являються автоматично</p>
+  <div class="badge">● Очікування замовлень...</div>
+</div>
+
+<div class="orders" id="orders">
+  <div class="empty">Поки що немає замовлень 😴<br>Як тільки гість оформить — з'явиться тут!</div>
+</div>
+
+<script>
+const DB_URL = "https://nfcaurotag-default-rtdb.europe-west1.firebasedatabase.app/orders.json";
+const fmt = n => n.toLocaleString('uk-UA') + ' ₴';
+const ordersEl = document.getElementById('orders');
+
+function loadOrders(){
+  fetch(DB_URL).then(r => r.json()).then(data => {
+    ordersEl.innerHTML = '';
+    if(!data){
+      ordersEl.innerHTML = '<div class="empty">Поки що немає замовлень 😴<br>Як тільки гість оформить — з\'явиться тут!</div>';
+      return;
+    }
+    Object.entries(data).forEach(([key, o]) => {
+      const card = document.createElement('div');
+      card.className = 'order';
+      const payIcon = o.pay === 'card' ? '💳' : '💵';
+      card.innerHTML = `
+        <div class="order-top">
+          <span class="num">№ ${o.num}</span>
+          <span class="time">🕐 ${o.time}</span>
+        </div>
+        <div class="meta">
+          <span>🪑 Столик: <b>${o.table}</b></span>
+          <span>👤 ${o.name}</span>
+          <span>${payIcon} ${o.pay === 'card' ? 'Картка' : 'Готівка'}</span>
+        </div>
+        ${o.comment ? `<div class="comment">💬 ${o.comment}</div>` : ''}
+        <div class="items">
+          ${o.items.map(i => `<div class="item"><span>${i.name} × ${i.qty}</span><span>${fmt(i.price*i.qty)}</span></div>`).join('')}
+          <div class="sum">Разом: ${fmt(o.sum)}</div>
+        </div>
+        <button class="done" data-key="${key}">✓ Виконано</button>`;
+      ordersEl.appendChild(card);
+    });
+  });
+}
+
+ordersEl.addEventListener('click', e => {
+  const btn = e.target.closest('.done'); if(!btn) return;
+  fetch(DB_URL.replace('.json', '/' + btn.dataset.key + '.json'), {method:'DELETE'}).then(loadOrders);
+});
+
+loadOrders();
+setInterval(loadOrders, 3000);
+</script>
+</body>
+</html>
